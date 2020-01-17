@@ -8,7 +8,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (reg, res, next) => {
-    res.send('Hello world');
+    res.send('Hello world!');
 });
 
 app.use((req, res, next) => {
