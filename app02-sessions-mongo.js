@@ -92,7 +92,7 @@ app.post('/login', (req,res,next) => {
             return res.redirect('/'); 
         }
     
-    console.log('User name not registered', user);
+    console.log('User name not registered', user_name);
     res.redirect('/login');
     });
 });
