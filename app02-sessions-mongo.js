@@ -46,6 +46,9 @@ app.get('/', is_logged_handler, (req,res,next)=>{
     const user = req.session.user;
     res.write(`
     <html>
+    <head><title>MemoApp</title>
+        <meta http-equiv="Content-Type", content="text/html;charset=UTF-8">
+    </head>
     <body>
         Logged in as user: ${user.name}
         <form action="/logout" method="POST">
@@ -66,6 +69,9 @@ app.get('/login', (req,res,next) => {
     console.log('user:',req.session.user);
     res.write(`
     <html>
+    <head><title>MemoApp</title>
+        <meta http-equiv="Content-Type", content="text/html;charset=UTF-8">
+    </head>
     <body>
         <form action="/login" method="POST">
             <input type="text" name="user_name">
