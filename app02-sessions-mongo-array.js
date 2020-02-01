@@ -5,11 +5,24 @@ const session = require('express-session');
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+const note_schema = new Schema({
+    text: {
+        type: String,
+        required: true
+    }
+});
+const note_model = mongoose.model('note', note_schema);
+
 const user_schema = new Schema({
     name: {
         type: String,
         required: true
-    }
+    },
+    notes: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'note',
+        required: true
+    }]
 });
 const user_model = mongoose.model('user', user_schema);
 
@@ -54,26 +67,85 @@ app.use((req,res,next) => {
 
 app.get('/', is_logged_handler, (req,res,next)=>{
     const user = req.user;
-    res.write(`
-    <html>
-    <head><title>MemoApp</title>
-        <meta http-equiv="Content-Type", content="text/html;charset=UTF-8">
-    </head>
-    <body>
-        Logged in as user: ${user.name}
-        <form action="/logout" method="POST">
-            <button type="submit">Log out</button>
-        </form>
-    </body>
-    </html>
-    `);
-    res.end();
+    user.populate('notes').execPopulate().then(()=>{
+        res.write(`
+        <html>
+        <head><title>MemoApp</title>
+            <meta http-equiv="Content-Type", content="text/html;charset=UTF-8">
+        </head>
+        <body>
+            Logged in as user: ${user.name}
+            <form action="/logout" method="POST">
+                <button type="submit">Log out</button>
+            </form>
+            <form action="/add-note" method="POST">
+                <input type="text" name="note">
+                <button type="submit">Add note</button>
+            </form>`);
+        user.notes.forEach((note) => {
+            res.write(`
+            <div>${note.text}
+            <form action="/delete-note" method="POST">
+                <input type="hidden" name="note_id", value="${note._id}">
+                <button type="submit" class="delete_button">Delete note</button>
+            </form>
+            </div>`);
+        });
+        res.write(`
+        </body>
+        </html>
+        `);
+        res.end();
+    });
+
 })
+app.post('/add-note', (req,res,next) => {
+    if(!req.body.note){
+        return res.redirect('/');
+    }
+    let new_note = note_model({
+        text: req.body.note
+    });
+    new_note.save().then( () => {
+        req.user.notes.push(new_note);
+        req.user.save().then(()=>{
+            console.log('note saved');
+            return res.redirect('/');
+        });
+    });
+});
+
+app.post('/delete-note', (req,res,next) => {
+    const user = req.user;
+    const note_id_to_delete = req.body.note_id;
+
+    //remove note from user.notes
+    const updated_notes = user.notes.filter((note_id)=>{
+        return note_id != note_id_to_delete;
+    });
+    user.notes = updated_notes;
+    user.save().then(()=>{
+        //Delete note object form database
+        note_model.findByIdAndRemove(note_id_to_delete).then(()=>{
+            res.redirect('/');
+        });
+    });
+});
+
+app.get('/note/:id', (req,res,next)=>{
+    const note_id = req.params.id;
+    note_model.findById({
+        _id: note_id
+    }).then((note)=>{
+        res.send(note.text);
+    });
+
+});
 
 app.post('/logout', (req,res,next) => {
     req.session.destroy();
     res.redirect('/login');
-})
+});
 
 app.get('/login', (req,res,next) => {
     console.log('user:',req.session.user);
@@ -99,7 +171,7 @@ app.get('/login', (req,res,next) => {
 
 app.post('/login', (req,res,next) => {
     const user_name = req.body.user_name;
-
+    
     user_model.findOne({
         name: user_name
     }).then((user) => {
@@ -115,7 +187,9 @@ app.post('/login', (req,res,next) => {
 
 app.post('/register', (req,res,next) => {
     const user_name = req.body.user_name;
-
+    if(!user_name){
+        return res.redirect('/login');
+    }
     user_model.findOne({
         name: user_name
     }).then((user) => {
@@ -125,7 +199,8 @@ app.post('/register', (req,res,next) => {
         }
 
         let new_user = new user_model({
-            name: user_name
+            name: user_name,
+            notes: []
         });
 
         new_user.save().then(()=>{
@@ -146,7 +221,7 @@ mongoose.connect(mongoose_url, {
     useNewUrlParser: true
 }).then(()=>{
     console.log('Mongoose connected');
-    console.log('Start expess server');
+    console.log('Start express server');
     app.listen(PORT);
 });
 

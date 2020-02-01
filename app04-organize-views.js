@@ -5,13 +5,13 @@ const session = require('express-session');
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const user_schema = new Schema({
-    name: {
-        type: String,
-        required: true
-    }
-});
-const user_model = mongoose.model('user', user_schema);
+//Models
+const user_model = require('./models/user-model');
+const note_model = require('./models/note-model');
+
+//Views
+const auth_views = require('./views/auth-views');
+const note_views = require('./views/note-views');
 
 let app = express();
 
@@ -54,52 +54,69 @@ app.use((req,res,next) => {
 
 app.get('/', is_logged_handler, (req,res,next)=>{
     const user = req.user;
-    res.write(`
-    <html>
-    <head><title>MemoApp</title>
-        <meta http-equiv="Content-Type", content="text/html;charset=UTF-8">
-    </head>
-    <body>
-        Logged in as user: ${user.name}
-        <form action="/logout" method="POST">
-            <button type="submit">Log out</button>
-        </form>
-    </body>
-    </html>
-    `);
-    res.end();
-})
+    user.populate('notes').execPopulate().then(()=>{
+        res.send(note_views.notes_view({
+            user_name: user.name,
+            notes: user.notes})
+        );
+    });
+});
+app.post('/add-note', (req,res,next) => {
+    if(!req.body.note){
+        return res.redirect('/');
+    }
+    let new_note = note_model({
+        text: req.body.note
+    });
+    new_note.save().then( () => {
+        req.user.notes.push(new_note);
+        req.user.save().then(()=>{
+            console.log('note saved');
+            return res.redirect('/');
+        });
+    });
+});
+
+app.post('/delete-note', (req,res,next) => {
+    const user = req.user;
+    const note_id_to_delete = req.body.note_id;
+
+    //remove note from user.notes
+    const updated_notes = user.notes.filter((note_id)=>{
+        return note_id != note_id_to_delete;
+    });
+    user.notes = updated_notes;
+    user.save().then(()=>{
+        //Delete note object form database
+        note_model.findByIdAndRemove(note_id_to_delete).then(()=>{
+            res.redirect('/');
+        });
+    });
+});
+
+app.get('/note/:id', (req,res,next)=>{
+    const note_id = req.params.id;
+    note_model.findById({
+        _id: note_id
+    }).then((note)=>{
+        res.send(note.text);
+    });
+
+});
 
 app.post('/logout', (req,res,next) => {
     req.session.destroy();
     res.redirect('/login');
-})
+});
 
 app.get('/login', (req,res,next) => {
     console.log('user:',req.session.user);
-    res.write(`
-    <html>
-    <head><title>MemoApp</title>
-        <meta http-equiv="Content-Type", content="text/html;charset=UTF-8">
-    </head>
-    <body>
-        <form action="/login" method="POST">
-            <input type="text" name="user_name">
-            <button type="submit">Log in</button>
-        </form>
-        <form action="/register" method="POST">
-            <input type="text" name="user_name">
-            <button type="submit">Register</button>
-        </form>
-    </body>
-    </html>
-    `);
-    res.end();
+    res.send(auth_views.login_view());
 });
 
 app.post('/login', (req,res,next) => {
     const user_name = req.body.user_name;
-
+    
     user_model.findOne({
         name: user_name
     }).then((user) => {
@@ -115,7 +132,9 @@ app.post('/login', (req,res,next) => {
 
 app.post('/register', (req,res,next) => {
     const user_name = req.body.user_name;
-
+    if(!user_name){
+        return res.redirect('/login');
+    }
     user_model.findOne({
         name: user_name
     }).then((user) => {
@@ -125,7 +144,8 @@ app.post('/register', (req,res,next) => {
         }
 
         let new_user = new user_model({
-            name: user_name
+            name: user_name,
+            notes: []
         });
 
         new_user.save().then(()=>{
@@ -146,7 +166,7 @@ mongoose.connect(mongoose_url, {
     useNewUrlParser: true
 }).then(()=>{
     console.log('Mongoose connected');
-    console.log('Start expess server');
+    console.log('Start express server');
     app.listen(PORT);
 });
 

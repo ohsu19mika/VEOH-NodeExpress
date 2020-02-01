@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node app02-sessions-mongo.js",
-    "start-dev": "nodemon app02-sessions-mongo.js"
+    "start": "node app04-organize-views.js",
+    "start-dev": "nodemon app04-organize-views.js"
   },
   "repository": {
     "type": "git",
